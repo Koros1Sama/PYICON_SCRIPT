@@ -499,11 +499,9 @@ class IconConverterApp(QMainWindow):
         self.setGeometry(100, 100, 600, 450)  # زيادة الارتفاع لإضافة الأزرار الجديدة
 
         # إضافة أيقونة للتطبيق
-        icon_path = r"E:\vs\py\app_icon.ico"  # المسار المطلق للأيقونة
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
-        else:
-            QMessageBox.warning(self, "تحذير", "لم يتم العثور على ملف الأيقونة!")
+        current_dir = os.path.dirname(__file__)  # الحصول على مسار المجلد الحالي
+        icon_path = os.path.join(current_dir, "app_icon.ico")  # المسار النسبي للأيقونة
+        self.setWindowIcon(QIcon(icon_path))
 
         # إنشاء تخطيط رئيسي
         main_layout = QVBoxLayout()
@@ -794,13 +792,15 @@ class IconConverterApp(QMainWindow):
 if __name__ == "__main__":
     app = QApplication([])
     
-    # تعيين أيقونة للتطبيق
-    icon_path = r"E:\vs\py\app_icon.ico"  # المسار المطلق للأيقونة
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
-    else:
-        QMessageBox.warning(None, "تحذير", "لم يتم العثور على ملف الأيقونة!")
+# الحصول على مسار المجلد الحالي الذي يحتوي على البرنامج
+current_dir = os.path.dirname(__file__)
 
-    window = IconConverterApp()
-    window.show()
-    app.exec_()
+# المسار النسبي للأيقونة (في نفس مجلد البرنامج)
+icon_path = os.path.join(current_dir, "app_icon.ico")
+
+# تعيين أيقونة للتطبيق
+app.setWindowIcon(QIcon(icon_path))
+
+window = IconConverterApp()
+window.show()
+app.exec_()
