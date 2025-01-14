@@ -2,8 +2,9 @@ import os
 import json
 import shutil
 import requests
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, 
-                             QFileDialog, QMessageBox, QCheckBox, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QSpinBox, QComboBox)
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QSpinBox, QComboBox
+)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PIL import Image
@@ -35,6 +36,45 @@ def load_settings():
 def save_settings(settings):
     with open(settings_file, "w") as file:
         json.dump(settings, file)
+
+class HideUnhideThread(QThread):
+    progress = pyqtSignal(int)
+    finished = pyqtSignal(str)
+
+    def __init__(self, folder_path, action):
+        super().__init__()
+        self.folder_path = folder_path
+        self.action = action  # "hide" أو "unhide"
+
+    def run(self):
+        try:
+            folders = []
+            for root, _, _ in os.walk(self.folder_path):
+                folders.append(root)
+
+            total_folders = len(folders)
+            for i, root in enumerate(folders):
+                # إخفاء أو إظهار desktop.ini
+                ini_path = os.path.join(root, "desktop.ini")
+                if os.path.exists(ini_path):
+                    if self.action == "hide":
+                        os.system(f'attrib +h +s "{ini_path}"')  # إخفاء أقوى
+                    elif self.action == "unhide":
+                        os.system(f'attrib +h -s "{ini_path}"')  # إظهار
+
+                # إخفاء أو إظهار الأيقونة
+                icon_path = os.path.join(root, "Poster.ico")
+                if os.path.exists(icon_path):
+                    if self.action == "hide":
+                        os.system(f'attrib +h +s "{icon_path}"')  # إخفاء أقوى
+                    elif self.action == "unhide":
+                        os.system(f'attrib -h -s "{icon_path}"')  # إظهار
+
+                self.progress.emit(int((i + 1) / total_folders * 100))  # تحديث شريط التقدم
+
+            self.finished.emit(f"تم {self.action} الملفات والأيقونات بنجاح!")
+        except Exception as e:
+            self.finished.emit(f"حدث خطأ أثناء العملية: {e}")
 
 class ConversionThread(QThread):
     progress = pyqtSignal(int)
@@ -456,7 +496,7 @@ class IconConverterApp(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("تحويل الصور إلى أيقونات")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 600, 450)  # زيادة الارتفاع لإضافة الأزرار الجديدة
 
         # إضافة أيقونة للتطبيق
         icon_path = r"E:\vs\py\app_icon.ico"  # المسار المطلق للأيقونة
@@ -468,7 +508,7 @@ class IconConverterApp(QMainWindow):
         # إنشاء تخطيط رئيسي
         main_layout = QVBoxLayout()
 
-        # حقول الإدخال
+        # حقول الإدخال (غير متغيرة)
         self.folder_path_label = QLabel("المجلد الرئيسي:", self)
         self.folder_path_entry = QLineEdit(self)
         self.folder_path_entry.setText(self.settings["main_path"])
@@ -570,6 +610,33 @@ class IconConverterApp(QMainWindow):
 
         main_layout.addLayout(button_layout)
 
+        # أزرار إخفاء وإظهار الملفات والأيقونات
+        hide_unhide_layout = QHBoxLayout()
+        self.hide_files_button = QPushButton("إخفاء الملفات والأيقونات بشكل كامل", self)
+        self.hide_files_button.clicked.connect(self.hide_files_and_icons)
+        hide_unhide_layout.addWidget(self.hide_files_button)
+
+        self.unhide_files_button = QPushButton("إظهار الملفات والأيقونات", self)
+        self.unhide_files_button.clicked.connect(self.unhide_files_and_icons)
+        hide_unhide_layout.addWidget(self.unhide_files_button)
+
+        main_layout.addLayout(hide_unhide_layout)
+
+        # إضافة حقل مصدر البحث
+        self.api_label = QLabel("مصدر البحث:", self)
+        self.api_combo = QComboBox(self)
+        self.api_combo.addItem("MyAnimeList")
+        self.api_combo.addItem("Anilist")
+        self.api_combo.addItem("TVmaze")
+        self.api_combo.addItem("OMDb")
+        self.api_combo.addItem("RAWG")
+        self.api_combo.setCurrentIndex(0)  # افتراضيًا MyAnimeList
+
+        api_layout = QHBoxLayout()
+        api_layout.addWidget(self.api_label)
+        api_layout.addWidget(self.api_combo)
+        main_layout.addLayout(api_layout)  # إضافة api_layout إلى main_layout
+
         # تعيين التخطيط الرئيسي للنافذة
         central_widget = QWidget()
         central_widget.setLayout(main_layout)
@@ -585,19 +652,27 @@ class IconConverterApp(QMainWindow):
         self.use_default_icon_check.stateChanged.connect(self.update_settings)
         self.subfolder_levels_entry.valueChanged.connect(self.update_settings)
 
-        self.api_label = QLabel("مصدر البحث:", self)
-        self.api_combo = QComboBox(self)
-        self.api_combo.addItem("MyAnimeList")
-        self.api_combo.addItem("Anilist")
-        self.api_combo.addItem("TVmaze")
-        self.api_combo.addItem("OMDb")
-        self.api_combo.addItem("RAWG")
-        self.api_combo.setCurrentIndex(0)  # افتراضيًا MyAnimeList
+    def hide_files_and_icons(self):
+        """إخفاء desktop.ini والأيقونة بشكل كامل."""
+        if not os.path.exists(self.settings["main_path"]):
+            QMessageBox.critical(self, "خطأ", "المسار الرئيسي غير موجود.")
+            return
 
-        api_layout = QHBoxLayout()
-        api_layout.addWidget(self.api_label)
-        api_layout.addWidget(self.api_combo)
-        main_layout.addLayout(api_layout)
+        self.hide_unhide_thread = HideUnhideThread(self.settings["main_path"], "hide")
+        self.hide_unhide_thread.progress.connect(self.update_progress)
+        self.hide_unhide_thread.finished.connect(self.show_message)
+        self.hide_unhide_thread.start()
+
+    def unhide_files_and_icons(self):
+        """إظهار desktop.ini والأيقونة."""
+        if not os.path.exists(self.settings["main_path"]):
+            QMessageBox.critical(self, "خطأ", "المسار الرئيسي غير موجود.")
+            return
+
+        self.hide_unhide_thread = HideUnhideThread(self.settings["main_path"], "unhide")
+        self.hide_unhide_thread.progress.connect(self.update_progress)
+        self.hide_unhide_thread.finished.connect(self.show_message)
+        self.hide_unhide_thread.start()
 
     def browse_path(self, entry, is_file=False):
         """
@@ -729,5 +804,3 @@ if __name__ == "__main__":
     window = IconConverterApp()
     window.show()
     app.exec_()
-    #SSSSSS
-    #SSSSSS
